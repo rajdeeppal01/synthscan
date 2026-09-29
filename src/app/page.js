@@ -177,9 +177,74 @@ export default function HomePage() {
     }
   };
 
-  const handleUrlAnalyze = () => {
-    if (!urlInput.trim()) return;
-    setError('URL analysis requires yt-dlp to be configured on the server. For now, please upload a video file directly. This feature is coming soon!');
+  const startUrlAnalysis = async () => {
+    const url = urlInput.trim();
+    if (!url) return;
+
+    // Basic URL check
+    try { new URL(url); } catch {
+      setError('Please enter a valid URL.');
+      return;
+    }
+
+    setError('');
+    setAnalysisState('extracting');
+    setAnalysisStep(0);
+    setProgress(10);
+
+    try {
+      // Step 0: Server downloads + extracts frames
+      setAnalysisStep(1);
+      const fetchRes = await fetch('/api/fetch-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!fetchRes.ok) {
+        const errData = await fetchRes.json();
+        throw new Error(errData.error || 'Failed to download video');
+      }
+
+      const { frames, videoMeta } = await fetchRes.json();
+      setProgress(40);
+
+      // Step 1: Send frames to Gemini analysis
+      setAnalysisState('analyzing');
+      setAnalysisStep(2);
+
+      const progressTimer = setInterval(() => {
+        setProgress(p => Math.min(p + 3, 88));
+      }, 1500);
+
+      const analyzeRes = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ frames, videoMeta }),
+      });
+
+      clearInterval(progressTimer);
+
+      if (!analyzeRes.ok) {
+        const errData = await analyzeRes.json();
+        throw new Error(errData.error || 'Analysis failed');
+      }
+
+      const { id } = await analyzeRes.json();
+      setAnalysisStep(3);
+      setProgress(100);
+      setAnalysisState('done');
+
+      await new Promise(r => setTimeout(r, 700));
+      router.push(`/results/${id}`);
+
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Something went wrong. Please try again.');
+      setAnalysisState(null);
+      setProgress(0);
+      setAnalysisStep(0);
+    }
   };
 
   const isAnalyzing = analysisState !== null && analysisState !== 'done';
@@ -297,13 +362,14 @@ export default function HomePage() {
                 placeholder="https://youtube.com/watch?v=... or direct .mp4 URL"
                 value={urlInput}
                 onChange={e => setUrlInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && startUrlAnalysis()}
               />
-              <button className="btn-primary" onClick={handleUrlAnalyze}>
-                Analyze
+              <button className="btn-primary" onClick={startUrlAnalysis} disabled={isAnalyzing || !urlInput.trim()}>
+                {isAnalyzing ? '⏳ Analyzing...' : 'Analyze'}
               </button>
             </div>
             <div style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>ℹ️</span> URL support requires yt-dlp. See docs for setup.
+              <span>✅</span> YouTube, Instagram Reels, TikTok, direct MP4 URLs supported
             </div>
           </div>
         )}

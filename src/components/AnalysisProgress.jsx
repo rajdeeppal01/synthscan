@@ -1,10 +1,10 @@
 'use client';
 
 const STEPS = [
-  { id: 0, label: 'Extracting video frames', icon: '🎬', description: 'Sampling key moments from your video' },
-  { id: 1, label: 'Preprocessing frames', icon: '⚙️', description: 'Optimizing images for analysis' },
+  { id: 0, label: 'Preparing video source', icon: '🎬', description: 'Loading your video for processing' },
+  { id: 1, label: 'Extracting frames', icon: '⚙️', description: 'Capturing key moments — downloading if URL' },
   { id: 2, label: 'Running AI forensic analysis', icon: '🧠', description: 'Gemini Vision analyzing each frame for synthetic artifacts' },
-  { id: 3, label: 'Generating forensic report', icon: '📋', description: 'Compiling multi-signal findings' },
+  { id: 3, label: 'Generating forensic report', icon: '📋', description: 'Compiling multi-signal findings into a verdict' },
 ];
 
 export default function AnalysisProgress({ step, progress }) {
