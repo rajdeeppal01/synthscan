@@ -75,13 +75,14 @@ function downloadWithYtDlp(url, outputDir) {
     const args = [
       url,
       '--output', outputTemplate,
-      // Try best <=720p MP4, then fall back to whatever best quality is available
+      // Try best <=720p, fallback to best available
       '--format', 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
       '--merge-output-format', 'mp4',
       '--no-playlist',
       '--max-filesize', '200M',
       '--socket-timeout', '30',
-      // Print progress to stderr so we can capture actual errors
+      // Bypass YouTube bot detection on datacenter IPs by using mobile/android player
+      '--extractor-args', 'youtube:player_client=android,mweb',
       '--newline',
     ];
 
