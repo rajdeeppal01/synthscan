@@ -155,6 +155,7 @@ function downloadWithYtDlp(url, outputDir) {
         reject(err);
       }
     });
+  });
 }
 
 export async function POST(request) {
