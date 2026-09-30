@@ -1,14 +1,10 @@
 services:
   - type: web
     name: synthscan
-    runtime: node
+    env: docker
     region: oregon
     plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm start
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: GEMINI_API_KEY
         sync: false
       - key: HIVE_API_KEY
