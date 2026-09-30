@@ -35,15 +35,14 @@ function probeVideo(videoPath) {
  */
 function extractFramesFromVideo(videoPath, outputDir, numFrames, duration) {
   return new Promise((resolve, reject) => {
-    // Calculate timestamps to capture
-    const step = duration / (numFrames + 1);
-    const timestamps = Array.from({ length: numFrames }, (_, i) => step * (i + 1));
+    // If duration unknown or too short, fallback to fps=1
+    const safeDuration = duration > 1 ? duration : 10;
+    // fps filter: extract exactly numFrames frames spread across the video
+    const fpsVal = numFrames / safeDuration;
 
-    // Build ffmpeg select filter to grab specific timestamps
-    // Use fps=1/step approach for simplicity
     ffmpeg(videoPath)
       .outputOptions([
-        '-vf', `fps=${numFrames / Math.max(duration, 1)},scale=1280:-2`,
+        '-vf', `fps=${fpsVal.toFixed(6)},scale=1280:-2`,
         '-frames:v', String(numFrames),
         '-q:v', '3',
       ])
@@ -52,7 +51,7 @@ function extractFramesFromVideo(videoPath, outputDir, numFrames, duration) {
         const files = readdirSync(outputDir)
           .filter(f => f.endsWith('.jpg'))
           .sort();
-        
+
         const frames = files.map(f => {
           const data = readFileSync(join(outputDir, f));
           return `data:image/jpeg;base64,${data.toString('base64')}`;
@@ -152,7 +151,8 @@ export async function POST(request) {
 
     // 2. Probe duration and metadata
     const meta = await probeVideo(videoPath);
-    console.log(`[SynthScan] Video: ${meta.duration.toFixed(1)}s, ${meta.width}x${meta.height}`);
+    const durationStr = meta.duration > 0 ? `${meta.duration.toFixed(1)}s` : 'unknown';
+    console.log(`[SynthScan] Video: ${durationStr}, ${meta.width}x${meta.height}`);
 
     // 3. Extract frames
     mkdirSync(framesDir, { recursive: true });
