@@ -71,20 +71,37 @@ function downloadWithYtDlp(url, outputDir) {
   return new Promise((resolve, reject) => {
     const outputTemplate = join(outputDir, 'video.%(ext)s');
 
-    // Use simpler format fallback — avoids shell bracket-glob issues
+    // Write YouTube cookies to /tmp if env var is set (fixes datacenter IP bot detection)
+    let cookiesPath = null;
+    if (process.env.YOUTUBE_COOKIES_B64) {
+      try {
+        cookiesPath = join(tmpdir(), 'synthscan-yt-cookies.txt');
+        const { writeFileSync } = require('fs');
+        writeFileSync(cookiesPath, Buffer.from(process.env.YOUTUBE_COOKIES_B64, 'base64').toString('utf8'));
+      } catch (e) {
+        console.warn('[SynthScan] Failed to write cookies file:', e.message);
+        cookiesPath = null;
+      }
+    }
+
     const args = [
       url,
       '--output', outputTemplate,
-      // Try best <=720p, fallback to best available
       '--format', 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
       '--merge-output-format', 'mp4',
       '--no-playlist',
       '--max-filesize', '200M',
       '--socket-timeout', '30',
-      // Bypass YouTube bot detection on datacenter IPs by using mobile/android player
-      '--extractor-args', 'youtube:player_client=android,mweb',
+      '--no-update-check',
+      // Try multiple YouTube player clients to bypass datacenter bot detection
+      '--extractor-args', 'youtube:player_client=android,mweb,web_embedded',
       '--newline',
     ];
+
+    // Add cookies if available
+    if (cookiesPath) {
+      args.push('--cookies', cookiesPath);
+    }
 
     // Include common yt-dlp install locations in PATH
     const extraPaths = [
@@ -119,9 +136,15 @@ function downloadWithYtDlp(url, outputDir) {
           reject(new Error('Download completed but no video file found in temp dir'));
         }
       } else {
-        // Give the most useful error — prefer stderr content
         const errMsg = (stderr || stdout).trim().slice(-500) || `yt-dlp exited with code ${code}`;
-        reject(new Error(`Download failed: ${errMsg}`));
+        // Give a friendly message for YouTube bot detection specifically
+        if (errMsg.includes('Sign in to confirm') || errMsg.includes('bot')) {
+          reject(new Error(
+            'YouTube is blocking this server IP. Please add your YouTube cookies via the YOUTUBE_COOKIES_B64 environment variable on Render, or try a direct .mp4 URL or Instagram/TikTok link instead.'
+          ));
+        } else {
+          reject(new Error(`Download failed: ${errMsg}`));
+        }
       }
     });
 
@@ -132,9 +155,7 @@ function downloadWithYtDlp(url, outputDir) {
         reject(err);
       }
     });
-  });
 }
-
 
 export async function POST(request) {
   const tempDir = mkdtempSync(join(tmpdir(), 'synthscan-'));
