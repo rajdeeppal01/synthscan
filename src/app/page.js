@@ -51,10 +51,14 @@ async function extractFrames(videoFile, numFrames = MAX_FRAMES) {
       }
 
       video.addEventListener('seeked', () => {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        frames.push(canvas.toDataURL('image/jpeg', 0.82));
-        currentFrameIdx++;
-        captureNext();
+        // Safari bug fix: 'seeked' fires before the frame is decoded to the buffer.
+        // Waiting slightly ensures the canvas doesn't draw a black frame.
+        setTimeout(() => {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          frames.push(canvas.toDataURL('image/jpeg', 0.82));
+          currentFrameIdx++;
+          captureNext();
+        }, 150);
       });
 
       captureNext();
