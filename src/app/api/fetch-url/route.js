@@ -71,16 +71,18 @@ function downloadWithYtDlp(url, outputDir) {
   return new Promise((resolve, reject) => {
     const outputTemplate = join(outputDir, 'video.%(ext)s');
 
+    // Use simpler format fallback — avoids shell bracket-glob issues
     const args = [
       url,
       '--output', outputTemplate,
-      '--format', 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]/best',
+      // Try best <=720p MP4, then fall back to whatever best quality is available
+      '--format', 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
       '--merge-output-format', 'mp4',
       '--no-playlist',
-      '--no-warnings',
-      '--quiet',
       '--max-filesize', '200M',
       '--socket-timeout', '30',
+      // Print progress to stderr so we can capture actual errors
+      '--newline',
     ];
 
     // Include common yt-dlp install locations in PATH
@@ -96,33 +98,42 @@ function downloadWithYtDlp(url, outputDir) {
       PATH: `${process.env.PATH}${process.platform === 'win32' ? ';' : ':'}${extraPaths}`,
     };
 
-    const proc = spawn('yt-dlp', args, { shell: true, env });
+    // shell: false — avoids PowerShell/bash treating [ ] as glob patterns
+    const proc = spawn('yt-dlp', args, { shell: false, env });
 
     let stderr = '';
+    let stdout = '';
     proc.stderr.on('data', d => { stderr += d.toString(); });
+    proc.stdout.on('data', d => { stdout += d.toString(); });
 
     proc.on('close', (code) => {
       if (code === 0) {
-        const files = readdirSync(outputDir).filter(f => f.startsWith('video.'));
+        // Find downloaded video file (any extension)
+        const files = readdirSync(outputDir).filter(f =>
+          f.startsWith('video.') && !f.endsWith('.part') && !f.endsWith('.ytdl')
+        );
         if (files.length > 0) {
           resolve(join(outputDir, files[0]));
         } else {
-          reject(new Error('Download completed but no video file found'));
+          reject(new Error('Download completed but no video file found in temp dir'));
         }
       } else {
-        reject(new Error(`Download failed: ${stderr.slice(-300) || 'unknown error'}`));
+        // Give the most useful error — prefer stderr content
+        const errMsg = (stderr || stdout).trim().slice(-500) || `yt-dlp exited with code ${code}`;
+        reject(new Error(`Download failed: ${errMsg}`));
       }
     });
 
     proc.on('error', (err) => {
       if (err.code === 'ENOENT') {
-        reject(new Error('yt-dlp is not installed on this server'));
+        reject(new Error('yt-dlp binary not found. It may not be installed on this server.'));
       } else {
         reject(err);
       }
     });
   });
 }
+
 
 export async function POST(request) {
   const tempDir = mkdtempSync(join(tmpdir(), 'synthscan-'));
