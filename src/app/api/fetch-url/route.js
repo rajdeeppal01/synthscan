@@ -92,7 +92,6 @@ function downloadWithYtDlp(url, outputDir) {
       '--no-playlist',
       '--max-filesize', '200M',
       '--socket-timeout', '30',
-      '--no-update-check',
       // Try multiple YouTube player clients to bypass datacenter bot detection
       '--extractor-args', 'youtube:player_client=android,mweb,web_embedded',
       '--newline',
